@@ -1,0 +1,79 @@
+/**
+ * Instagram Unfollow Tracker
+ * Este script identifica a los usuarios que no te siguen de vuelta.
+ */
+
+function getCookie(name) {
+    let value = `; ${document.cookie}`;
+    let parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(";").shift();
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function afterUrlGenerator(cursor) {
+    return `https://www.instagram.com/graphql/query/?query_hash=3dec7e2c57367ef3da3d987d89f9dbc8&variables={"id":"${ds_user_id}","include_reel":"true","fetch_mutual":"false","first":"24","after":"${cursor}"}`;
+}
+
+let followedPeople;
+let csrftoken = getCookie("csrftoken");
+let ds_user_id = getCookie("ds_user_id");
+let initialURL = `https://www.instagram.com/graphql/query/?query_hash=3dec7e2c57367ef3da3d987d89f9dbc8&variables={"id":"${ds_user_id}","include_reel":"true","fetch_mutual":"false","first":"24"}`;
+let doNext = true;
+let filteredList = [];
+let getUnfollowCounter = 0;
+let scrollCicle = 0;
+
+async function startScript() {
+    while (doNext) {
+        let data;
+        try {
+            data = await fetch(initialURL).then(res => res.json());
+        } catch (err) {
+            continue;
+        }
+
+        if (!followedPeople) followedPeople = data.data.user.edge_follow.count;
+        
+        doNext = data.data.user.edge_follow.page_info.has_next_page;
+        initialURL = afterUrlGenerator(data.data.user.edge_follow.page_info.end_cursor);
+        getUnfollowCounter += data.data.user.edge_follow.edges.length;
+
+        data.data.user.edge_follow.edges.forEach(item => {
+            if (!item.node.follows_viewer) {
+                filteredList.push(item.node);
+            }
+        });
+
+        console.clear();
+        console.log(`%c Progress ${getUnfollowCounter}/${followedPeople} (${parseInt((getUnfollowCounter / followedPeople) * 100)}%)`, "background: #222; color: #bada55; font-size: 25px;");
+        console.log("%c Usuarios que no te siguen de vuelta:", "background: #222; color: #FC4119; font-size: 13px;");
+        
+        filteredList.forEach(user => console.log(user.username));
+
+        await sleep(Math.floor(Math.random() * 400) + 1000);
+        
+        scrollCicle++;
+        if (scrollCicle > 6) {
+            scrollCicle = 0;
+            console.log("%c Esperando 10 segundos para evitar bloqueo temporal...", "background: #222; color: #FF0000; font-size: 20px;");
+            await sleep(10000);
+        }
+    }
+
+    // Generar descarga del archivo JSON
+    const jsonContent = JSON.stringify(filteredList);
+    const blob = new Blob([jsonContent], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    
+    link.href = url;
+    link.download = "usersNotFollowingBack.json";
+    link.click();
+
+    console.log("%c ¡Proceso completado!", "background: #222; color: #bada55; font-size: 25px;");
+}
+
+startScript();
